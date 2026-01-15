@@ -25,6 +25,28 @@
 #include "weather-translate.h"
 #include "weather-icon.h"
 
+static gchar *
+get_hijri_date(void)
+{
+    FILE *fp;
+    char buffer[256];
+    gchar *result = NULL;
+
+    fp = popen(g_strdup_printf("%s/bin/hijri-date panel", g_get_home_dir()), "r");
+    if (fp != NULL) {
+        if (fgets(buffer, sizeof(buffer), fp) != NULL) {
+            g_strstrip(buffer);
+            result = g_strdup(buffer);
+        }
+        pclose(fp);
+    }
+
+    if (result == NULL)
+        result = g_strdup("Hijri date unavailable");
+
+    return result;
+}
+
 static gboolean
 lnk_clicked(GtkTextTag *tag,
             GObject *obj,
@@ -655,6 +677,16 @@ create_summary_tab(plugin_data *data)
 }
 
 
+static const gchar *weekdays[] = {
+    "Al-Ahad",
+    "Al-Ithnayn",
+    "Ath-Thulatha",
+    "Al-Arbi'a",
+    "Al-Khamis",
+    "Al-Jumu'ah",
+    "As-Sabt"
+};
+
 static gchar *
 get_dayname(gint day)
 {
@@ -662,17 +694,16 @@ get_dayname(gint day)
     time_t now_t = time(NULL), fcday_t;
     gint weekday;
 
+    if (day == 0)
+        return g_strdup("Today");
+    if (day == 1)
+        return g_strdup("Tomorrow");
+
     fcday_tm = *localtime(&now_t);
     fcday_t = time_calc_day(fcday_tm, day);
     weekday = localtime(&fcday_t)->tm_wday;
-    switch (day) {
-    case 0:
-        return g_strdup_printf(_("Today"));
-    case 1:
-        return g_strdup_printf(_("Tomorrow"));
-    default:
-        return translate_day(weekday);
-    }
+
+    return g_strdup(weekdays[weekday]);
 }
 
 
@@ -1185,7 +1216,11 @@ update_summary_subtitle(plugin_data *data)
         return FALSE;
 
     time(&now_t);
-    date = format_date(now_t, "%A %d %b %Y, %H:%M (%Z)", TRUE);
+    gchar *hijri = get_hijri_date();
+    gchar *time_str = format_date(now_t, "%H:%M (%Z)", TRUE);
+    date = g_strdup_printf("%s, %s", hijri, time_str);
+    g_free(hijri);
+    g_free(time_str);
     title = g_markup_printf_escaped("<big><b>%s</b>\n%s</big>", data->location_name, date);
     g_free(date);
     gtk_label_set_markup(GTK_LABEL(data->summary_subtitle), title);
